@@ -113,6 +113,14 @@ torchvision==0.13.1
 | NWPU_Crowd               |  [NWPU_Crowd.pth](https://drive.google.com/file/d/1MX7tQAexyc9slrt7TaNSK7j8RtSvnI2H/view?usp=sharing)  | - | - |
 
 
+## Frequently Asked Questions (FAQ)
+
+* The model trained on my custom dataset does not perform well, why?
+  * Please check the [load_data](https://github.com/cxliu0/PET/blob/main/datasets/SHA.py#L105) function in your custom dataset. The input format should be (y, x) instead of (x, y). If the input annotations are wrong during training, the output of the trained model could be abnormal.
+ 
+* How to deal with images with no person?
+  * Please refer to this [issue](https://github.com/cxliu0/PET/issues/33#issuecomment-2782560733).
+
 ## Citation
 
 If you find this work helpful for your research, please consider citing:
