@@ -708,7 +708,7 @@ class SetCriterion(nn.Module):
             elif self.probloss_cal == 'Psq': # P_squard, y = 1 - p^2
                 loss_points_raw = 1.0 - prob_vals.pow(2)
             elif self.probloss_cal == 'NLL': # Negative Log Likelihood, y = - log(p)
-                loss_points_raw = -torch.log(prob_vals.clamp_min(1e-6))
+                loss_points_raw = -torch.log(prob_vals.clamp_min(eps))
             elif self.probloss_cal == 'Squard': # Squard, y = (1 - p)^2
                 loss_points_raw = ((1.0 - prob_vals).pow(2))
             elif self.probloss_cal == 'Focal': # Focal, y = (1 - p)^γ * log(p)

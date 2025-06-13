@@ -126,3 +126,4 @@ tmp/
 pretrained/
 data
 cache
+log_vis.ipynb

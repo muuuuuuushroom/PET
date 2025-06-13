@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
-CUDA_VISIBLE_DEVICES=5 \
+CUDA_VISIBLE_DEVICES=1 \
 torchrun \
     --nproc_per_node=1 \
-    --master_port=10005 \
+    --master_port=10011 \
     --standalone \
     main.py \
     --lr 0.0001 \
@@ -19,13 +19,23 @@ torchrun \
     --epochs 1500 \
     --dataset_file SHA \
     --eval_freq 5 \
-    --output_dir vgg_probloss_Focal \
-    --loss_set_up probloss \
-    --probloss_cal Focal
+    --output_dir vgg_baseline_enpet \
+    --loss_set_up None \
+    --probloss_cal Linear
 
     # --resume /data/zlt/RSPET/PET/outputs/SHA/pet_model/best_checkpoint.pth
 
-# nohup sh train.sh> output_nohup/vgg_probloss_Focal.log 2>&1 &
+# nohup sh train.sh> output_nohup/vgg_baseline_enpet.log 2>&1 &
 
 # loss_set_up None, f4x, probloss, mixed
 # loss_set_up Linear, Psq, NLL, Squard, Focal
+
+# running:
+# 0//: 
+# 1//: SHA vgg baseline, on env:dinov2 and env:pet
+# 2//: SHA vgg f4x
+# 3//: SHA vgg probloss
+# 4//: SHA vgg mixed
+# 5//: SHA vgg probloss_focal
+# 6//: FAN DISABLED
+# 7//: DEPRECATED 
