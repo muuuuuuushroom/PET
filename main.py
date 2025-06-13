@@ -22,6 +22,10 @@ from models import build_model
 def get_args_parser():
     parser = argparse.ArgumentParser('Set Point Query Transformer', add_help=False)
 
+    # experiment set up
+    parser.add_argument('--set_up', default=None, type=str,
+                        choices=(None, 'f4x', 'probloss', 'mixed'))
+    
     # training Parameters
     parser.add_argument('--lr', default=1e-4, type=float)
     parser.add_argument('--lr_backbone', default=1e-5, type=float)
@@ -66,7 +70,7 @@ def get_args_parser():
     parser.add_argument('--data_path', default="./data/ShanghaiTech/PartA", type=str)
 
     # misc parameters
-    parser.add_argument('--output_dir', default='',
+    parser.add_argument('--output_dir', default='outputs/test',
                         help='path where to save, empty for no saving')
     parser.add_argument('--device', default='cuda',
                         help='device to use for training / testing')
@@ -75,7 +79,7 @@ def get_args_parser():
     parser.add_argument('--start_epoch', default=0, type=int, metavar='N',
                         help='start epoch')
     parser.add_argument('--num_workers', default=2, type=int)
-    parser.add_argument('--eval_freq', default=5, type=int)
+    parser.add_argument('--eval_freq', default=1, type=int)
     parser.add_argument('--syn_bn', default=0, type=int)
 
     # distributed training parameters
@@ -96,6 +100,8 @@ def main(args):
     np.random.seed(seed)
     random.seed(seed)
 
+    torch.backends.cudnn.deterministic = True
+    
     # build model
     model, criterion = build_model(args)
     model.to(device)
@@ -126,14 +132,12 @@ def main(args):
 
     if args.distributed:
         sampler_train = DistributedSampler(dataset_train)
-        sampler_val = DistributedSampler(dataset_val, shuffle=False)
+        sampler_val = DistributedSampler(dataset_val, shuffle=False, drop_last=False)
     else:
         sampler_train = torch.utils.data.RandomSampler(dataset_train)
         sampler_val = torch.utils.data.SequentialSampler(dataset_val)
 
-    batch_sampler_train = torch.utils.data.BatchSampler(
-        sampler_train, args.batch_size, drop_last=True)
-
+    batch_sampler_train = torch.utils.data.BatchSampler(sampler_train, args.batch_size, drop_last=True)
     data_loader_train = DataLoader(dataset_train, batch_sampler=batch_sampler_train,
                                 collate_fn=utils.collate_fn, num_workers=args.num_workers)
     data_loader_val = DataLoader(dataset_val, 1, sampler=sampler_val,
@@ -209,7 +213,7 @@ def main(args):
                 f.write(json.dumps(log_stats) + "\n")
 
         # evaluation
-        if epoch % args.eval_freq == 0 and epoch > 0:
+        if epoch % args.eval_freq == 0: #and epoch > 0:
             t1 = time.time()
             test_stats = evaluate(model, data_loader_val, device, epoch, None)
             t2 = time.time()
@@ -229,9 +233,22 @@ def main(args):
                                                 
             # save best checkpoint
             if mae == best_mae and utils.is_main_process():
-                src_path = output_dir / 'checkpoint.pth'
-                dst_path = output_dir / 'best_checkpoint.pth'
-                shutil.copyfile(src_path, dst_path)
+                # src_path = output_dir / 'checkpoint.pth'
+                # dst_path = output_dir / 'best_checkpoint.pth'
+                # # ckpt = torch.load(src_path, map_location="cpu")
+                # # ckpt["best_epoch"] = epoch
+                # shutil.copyfile(src_path, dst_path)
+                bst_checkpoint_paths = [output_dir / 'best_checkpoint.pth']
+                for checkpoint in bst_checkpoint_paths:
+                    utils.save_on_master({
+                        'model': model_without_ddp.state_dict(),
+                        'optimizer': optimizer.state_dict(),
+                        'lr_scheduler': lr_scheduler.state_dict(),
+                        'epoch': epoch,
+                        'best_epoch': epoch,
+                        'args': args,
+                        'best_mae': best_mae,
+                    }, checkpoint)
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))

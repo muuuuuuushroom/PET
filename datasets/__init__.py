@@ -4,7 +4,8 @@ import torchvision
 from .SHA import build as build_sha
 
 data_path = {
-    'SHA': './data/ShanghaiTech/part_A/',
+    'SHA': 'data/Crowd_Counting/ShanghaiTech/part_A_final/',
+    'SHB': 'data/Crowd_Counting/ShanghaiTech/part_B_final/',
 }
 
 def build_dataset(image_set, args):

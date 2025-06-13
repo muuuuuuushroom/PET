@@ -23,7 +23,7 @@ class SHA(Dataset):
         self.gt_list = {}
         for img_name in self.img_list:
             img_path = f"{data_root}/{prefix}/images/{img_name}"  
-            gt_path = f"{data_root}/{prefix}/ground-truth/GT_{img_name}"
+            gt_path = f"{data_root}/{prefix}/ground_truth/GT_{img_name}"
             self.gt_list[img_path] = gt_path.replace("jpg", "mat")
         self.img_list = sorted(list(self.gt_list.keys()))
         self.nSamples = len(self.img_list)

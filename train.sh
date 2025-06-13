@@ -1,4 +1,4 @@
-CUDA_VISIBLE_DEVICES='0' \
+CUDA_VISIBLE_DEVICES='1' \
 python -m torch.distributed.launch \
     --nproc_per_node=1 \
     --master_port=10001 \
@@ -16,4 +16,8 @@ python -m torch.distributed.launch \
     --epochs=1500 \
     --dataset_file="SHA" \
     --eval_freq=5 \
-    --output_dir='pet_model'
+    --output_dir='vgg_baseline' \
+    --set_up='None'
+    # --resume='/data/zlt/RSPET/PET/outputs/SHA/pet_model/best_checkpoint.pth'
+
+# nohup sh train.sh> output_nohup/vgg_baseline.log 2>&1 &
