@@ -127,3 +127,5 @@ pretrained/
 data
 cache
 log_vis.ipynb
+train.sh
+eval.sh

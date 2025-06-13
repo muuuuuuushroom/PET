@@ -35,7 +35,3 @@ torchrun \
 # 1//: SHA vgg baseline, on env:dinov2 and env:pet
 # 2//: SHA vgg f4x
 # 3//: SHA vgg probloss
-# 4//: SHA vgg mixed
-# 5//: SHA vgg probloss_focal
-# 6//: FAN DISABLED
-# 7//: DEPRECATED 
