@@ -23,8 +23,8 @@ def get_args_parser():
     parser = argparse.ArgumentParser('Set Point Query Transformer', add_help=False)
 
     # experiment set up
-    parser.add_argument('--set_up', default=None, type=str,
-                        choices=(None, 'f4x', 'probloss', 'mixed'))
+    parser.add_argument('--set_up', default='None', type=str,
+                        choices=('None', 'f4x', 'probloss', 'mixed'))
     
     # training Parameters
     parser.add_argument('--lr', default=1e-4, type=float)
@@ -62,6 +62,7 @@ def get_args_parser():
     # - loss coefficients
     parser.add_argument('--ce_loss_coef', default=1.0, type=float)
     parser.add_argument('--point_loss_coef', default=5.0, type=float)
+    parser.add_argument('--prob_loss_coef', default=1.0, type=float)
     parser.add_argument('--eos_coef', default=0.5, type=float,
                         help="Relative classification weight of the no-object class")
 
