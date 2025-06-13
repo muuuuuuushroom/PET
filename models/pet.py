@@ -218,7 +218,7 @@ class PET(nn.Module):
         self.quadtree_sparse = BasePETCount(backbone, num_classes, quadtree_layer='sparse', args=args, transformer=transformer)
         self.quadtree_dense = BasePETCount(backbone, num_classes, quadtree_layer='dense', args=args, transformer=transformer)
         
-        self.set_up = args.set_up
+        self.set_up = args.loss_set_up
         if self.set_up in ['f4x', 'mixed']:
             self.prob_conv = nn.Sequential(
                 nn.Conv2d(in_channels=backbone.num_channels, out_channels=1, kernel_size=3, padding=1),
@@ -595,7 +595,7 @@ class SetCriterion(nn.Module):
         1) compute hungarian assignment between ground truth points and the outputs of the model
         2) supervise each pair of matched ground-truth / prediction and split map
     """
-    def __init__(self, num_classes, matcher, weight_dict, eos_coef, losses, loss_set_up):
+    def __init__(self, num_classes, matcher, weight_dict, eos_coef, losses, loss_set_up, probloss_cal):
         """
         Parameters:
             num_classes: one-class in crowd counting
@@ -615,6 +615,8 @@ class SetCriterion(nn.Module):
         self.register_buffer('empty_weight', empty_weight)
         self.div_thrs_dict = {8: 0.0, 4:0.5}
         self.loss_set_up = loss_set_up
+        if loss_set_up in ['probloss', 'mixed']:
+            self.probloss_cal = probloss_cal
     
     def loss_labels(self, outputs, targets, indices, num_points, log=True, **kwargs):
         """
@@ -699,8 +701,22 @@ class SetCriterion(nn.Module):
                 gt_prob_map[batch_indices],  # [N,1,H,W]
                 grid, mode='bilinear', align_corners=True
             ).squeeze(-1).squeeze(-1).squeeze(1)  # [N]
-            loss_points_raw = (1.0 - prob_vals.unsqueeze(1)).expand(-1, 2)
-            loss_points_raw = loss_points_raw * 0.05
+            
+            eps = 1e-6
+            if self.probloss_cal == 'Linear': # Linear, y = 1 - p
+                loss_points_raw = 1.0 - prob_vals
+            elif self.probloss_cal == 'Psq': # P_squard, y = 1 - p^2
+                loss_points_raw = 1.0 - prob_vals.pow(2)
+            elif self.probloss_cal == 'NLL': # Negative Log Likelihood, y = - log(p)
+                loss_points_raw = -torch.log(prob_vals.clamp_min(1e-6))
+            elif self.probloss_cal == 'Squard': # Squard, y = (1 - p)^2
+                loss_points_raw = ((1.0 - prob_vals).pow(2))
+            elif self.probloss_cal == 'Focal': # Focal, y = (1 - p)^γ * log(p)
+                gamma = 2.0
+                loss_points_raw = - (1.0 - prob_vals).pow(gamma) * torch.log(prob_vals.clamp_min(eps))
+            
+            # scale factor & shape adjustment
+            loss_points_raw = loss_points_raw.unsqueeze(1).expand(-1, 2) * 0.05
         else:
             loss_points_raw = F.smooth_l1_loss(src_points, target_points, reduction='none')
 
@@ -829,7 +845,7 @@ def build_pet(args):
 
     # build loss criterion
     matcher = build_matcher(args)
-    if args.set_up in ['f4x', 'mixed']:
+    if args.loss_set_up in ['f4x', 'mixed']:
         weight_dict = {'loss_ce': args.ce_loss_coef, 
                     'loss_points': args.point_loss_coef,
                     'loss_probs': args.prob_loss_coef}
@@ -839,6 +855,7 @@ def build_pet(args):
                     'loss_points': args.point_loss_coef}
         losses = ['labels', 'points']
     criterion = SetCriterion(num_classes, matcher=matcher, weight_dict=weight_dict,
-                             eos_coef=args.eos_coef, losses=losses, loss_set_up=args.set_up)
+                             eos_coef=args.eos_coef, losses=losses, 
+                             loss_set_up=args.loss_set_up, probloss_cal=args.probloss_cal)
     criterion.to(device)
     return model, criterion

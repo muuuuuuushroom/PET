@@ -23,8 +23,10 @@ def get_args_parser():
     parser = argparse.ArgumentParser('Set Point Query Transformer', add_help=False)
 
     # experiment set up
-    parser.add_argument('--set_up', default='None', type=str,
+    parser.add_argument('--loss_set_up', default='None', type=str,
                         choices=('None', 'f4x', 'probloss', 'mixed'))
+    parser.add_argument('--probloss_cal', default='Linear', type=str,
+                        choices=('Linear', 'Psq', 'NLL', 'Squard', 'Focal'))
     
     # training Parameters
     parser.add_argument('--lr', default=1e-4, type=float)

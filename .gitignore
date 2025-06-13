@@ -125,3 +125,4 @@ data/
 tmp/
 pretrained/
 data
+cache
