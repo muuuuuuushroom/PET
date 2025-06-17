@@ -176,7 +176,7 @@ def main(args):
     # training
     print("Start training")
     start_time = time.time()
-    for epoch in range(args.start_epoch, args.epochs):
+    for epoch in range(args.start_epoch, args.epochs+1):
         if args.distributed:
             sampler_train.set_epoch(epoch)
         
@@ -202,6 +202,7 @@ def main(args):
                 'optimizer': optimizer.state_dict(),
                 'lr_scheduler': lr_scheduler.state_dict(),
                 'epoch': epoch,
+                'best_epoch': best_epoch,
                 'args': args,
                 'best_mae': best_mae,
             }, checkpoint_path)
@@ -222,12 +223,12 @@ def main(args):
             t2 = time.time()
 
             # output results
-            mae, mse = test_stats['mae'], test_stats['mse']
+            mae, mse, r2 = test_stats['mae'], test_stats['mse'], test_stats['r2']
             if mae < best_mae:
                 best_epoch = epoch
                 best_mae = mae
             print("\n==========================")
-            print("\nepoch:", epoch, "mae:", mae, "mse:", mse, "\n\nbest mae:", best_mae, "best epoch:", best_epoch)
+            print("\nepoch:", epoch, "mae:", mae, "mse:", mse, "r2:", r2, "\n\nbest mae:", best_mae, "best epoch:", best_epoch)
             print("==========================\n")
             if utils.is_main_process():
                 with open(run_log_name, "a") as log_file:

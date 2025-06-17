@@ -15,6 +15,7 @@ import torch.nn.functional as F
 import util.misc as utils
 from util.misc import NestedTensor
 
+from sklearn.metrics import r2_score 
 
 class DeNormalize(object):
     def __init__(self, mean, std):
@@ -57,12 +58,12 @@ def visualization(samples, targets, pred, vis_dir, split_map=None):
             sample_vis = cv2.circle(sample_vis, (int(p[1]), int(p[0])), size, (0, 255, 0), -1)
         
         # draw split map
-        if split_map is not None:
-            imgH, imgW = sample_vis.shape[:2]
-            split_map = (split_map * 255).astype(np.uint8)
-            split_map = cv2.applyColorMap(split_map, cv2.COLORMAP_JET)
-            split_map = cv2.resize(split_map, (imgW, imgH), interpolation=cv2.INTER_NEAREST)
-            sample_vis = split_map * 0.9 + sample_vis
+        # if split_map is not None:
+        #     imgH, imgW = sample_vis.shape[:2]
+        #     split_map = (split_map * 255).astype(np.uint8)
+        #     split_map = cv2.applyColorMap(split_map, cv2.COLORMAP_JET)
+        #     split_map = cv2.resize(split_map, (imgW, imgH), interpolation=cv2.INTER_NEAREST)
+        #     sample_vis = split_map * 0.9 + sample_vis
         
         # save image
         if vis_dir is not None:
@@ -137,6 +138,8 @@ def evaluate(model, data_loader, device, epoch=0, vis_dir=None):
     if vis_dir is not None:
         os.makedirs(vis_dir, exist_ok=True)
 
+    y_true_all, y_pred_all = [], []
+    
     print_freq = 10
     for samples, targets in metric_logger.log_every(data_loader, print_freq, header):
         samples = samples.to(device)
@@ -155,7 +158,10 @@ def evaluate(model, data_loader, device, epoch=0, vis_dir=None):
         # compute error
         mae = abs(predict_cnt - gt_cnt)
         mse = (predict_cnt - gt_cnt) * (predict_cnt - gt_cnt)
-
+        
+        y_pred_all.append(predict_cnt)
+        y_true_all.append(gt_cnt)
+        
         # record results
         results = {}
         toTensor = lambda x: torch.tensor(x).float().cuda()
@@ -175,4 +181,5 @@ def evaluate(model, data_loader, device, epoch=0, vis_dir=None):
     metric_logger.synchronize_between_processes()
     results = {k: meter.global_avg for k, meter in metric_logger.meters.items()}
     results['mse'] = np.sqrt(results['mse'])
+    results['r2'] = r2_score(y_true_all, y_pred_all)
     return results

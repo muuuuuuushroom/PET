@@ -17,6 +17,11 @@ from models import build_model
 
 def get_args_parser():
     parser = argparse.ArgumentParser('Set Point Query Transformer', add_help=False)
+    # experiment set up
+    parser.add_argument('--loss_set_up', default='None', type=str,
+                        choices=('None', 'f4x', 'probloss', 'mixed'))
+    parser.add_argument('--probloss_cal', default='Linear', type=str,
+                        choices=('Linear', 'Psq', 'NLL', 'Squard', 'Focal'))
 
     # model parameters
     # - backbone
@@ -108,14 +113,14 @@ def main(args):
                 args.resume, map_location='cpu', check_hash=True)
         else:
             checkpoint = torch.load(args.resume, map_location='cpu')
-        model_without_ddp.load_state_dict(checkpoint['model'])        
+        model_without_ddp.load_state_dict(checkpoint['model'], strict=False)        
         cur_epoch = checkpoint['epoch'] if 'epoch' in checkpoint else 0
     
     # evaluation
     vis_dir = None if args.vis_dir == "" else args.vis_dir
     test_stats = evaluate(model, data_loader_val, device, vis_dir=vis_dir)
-    mae, mse = test_stats['mae'], test_stats['mse']
-    line = f'\nepoch: {cur_epoch}, mae: {mae}, mse: {mse}' 
+    mae, mse, r2 = test_stats['mae'], test_stats['mse'], test_stats['r2']
+    line = f'\n\tepoch: {cur_epoch}, \tmae: {mae:.3f}, \tmse: {mse:.3f}, \tr2:{r2:.4f}' 
     print(line)
 
 
