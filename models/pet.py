@@ -333,10 +333,10 @@ class PET(nn.Module):
         src, mask = features[self.encode_feats].decompose()
         src_pos_embed = pos[self.encode_feats]
         assert mask is not None
-        # encode_src = self.context_encoder(src, src_pos_embed, mask)
-        # context_info = (encode_src, src_pos_embed, mask)
-        encode_src = src
+        encode_src = self.context_encoder(src, src_pos_embed, mask)
+        # encode_src = src
         context_info = (encode_src, src_pos_embed, mask)
+        # context_info = (encode_src, src_pos_embed, mask)
         
         # apply quadtree splitter
         bs, _, src_h, src_w = src.shape
@@ -872,6 +872,11 @@ def build_pet(args):
         backbone = build_backbone_vitadapter(args)
     elif args.backbone == 'vgg16_bn':
         backbone = build_backbone_vgg(args)
+    elif args.backbone == 'vit_in_adapter':
+        backbone = build_backbone_vit_in_adapter(args)
+    elif args.backbone == 'dinov3':
+        backbone = build_backbone_dinov3(args)
+    
     model = PET(
         backbone,
         num_classes=num_classes,

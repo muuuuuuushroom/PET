@@ -42,7 +42,7 @@ def get_args_parser():
     # - backbone
     parser.add_argument('--backbone', default='vitadapter', type=str,
                         help="Name of the convolutional backbone to use",
-                        choices=['vgg16_bn', 'vitadapter'])
+                        choices=['vgg16_bn', 'vitadapter', 'vit_in_adapter', 'dinov3'])
     parser.add_argument('--position_embedding', default='sine', type=str, choices=('sine', 'learned', 'fourier'),
                         help="Type of positional embedding to use on top of the image features")
     # - transformer
@@ -72,7 +72,7 @@ def get_args_parser():
 
     # dataset parameters
     parser.add_argument('--dataset_file', default="SOY")
-    parser.add_argument('--data_path', default="./data/ShanghaiTech/PartA", type=str)
+    parser.add_argument('--data_path', default="noneed", type=str)
 
     # misc parameters
     parser.add_argument('--output_dir', default='outputs/test',
