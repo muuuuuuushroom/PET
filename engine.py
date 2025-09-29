@@ -28,7 +28,7 @@ class DeNormalize(object):
         return tensor
 
 
-def visualization(samples, targets, pred, vis_dir, split_map=None):
+def visualization(samples, targets, pred, vis_dir, split_map=None, queries=None):
     """
     Visualize predictions
     """
@@ -47,23 +47,38 @@ def visualization(samples, targets, pred, vis_dir, split_map=None):
         sample = restore_transform(images[idx])
         sample = pil_to_tensor(sample.convert('RGB')).numpy() * 255
         sample_vis = sample.transpose([1, 2, 0])[:, :, ::-1].astype(np.uint8).copy()
-
+        h, w = sample_vis.shape[:2]
         # draw ground-truth points (red)
-        size = 2
+        size = 3
         for t in gts[idx]:
-            sample_vis = cv2.circle(sample_vis, (int(t[1]), int(t[0])), size, (0, 0, 255), -1)
+            sample_vis = cv2.circle(sample_vis, (int(t[1]), int(t[0])), size+1, (0, 0, 255), -1)
 
         # draw predictions (green)
         for p in pred[idx]:
             sample_vis = cv2.circle(sample_vis, (int(p[1]), int(p[0])), size, (0, 255, 0), -1)
+            
+        # draw point-query
+        # for i, q in enumerate(queries[idx]):
+        #     q[1] *= w
+        #     q[0] *= h
+        #     sample_vis = cv2.circle(
+        #         sample_vis, (int(q[1]), int(q[0])), size, (0, 255, 255), -1
+        #         )
+        #     # draw line between query and pred
+        #     q_x, q_y = int(q[1]), int(q[0])
+        #     p_x, p_y = int(pred[idx][i][1]*w), int(pred[idx][i][0]*h)
+        #     overlay = sample_vis.copy()
+        #     cv2.line(overlay, (p_x, p_y), (q_x, q_y), (0, 255, 0), 2) 
+        #     alpha = 0.5  
+        #     sample_vis = cv2.addWeighted(overlay, alpha, sample_vis, 1 - alpha, 0)
         
         # draw split map
-        # if split_map is not None:
-        #     imgH, imgW = sample_vis.shape[:2]
-        #     split_map = (split_map * 255).astype(np.uint8)
-        #     split_map = cv2.applyColorMap(split_map, cv2.COLORMAP_JET)
-        #     split_map = cv2.resize(split_map, (imgW, imgH), interpolation=cv2.INTER_NEAREST)
-        #     sample_vis = split_map * 0.9 + sample_vis
+        if split_map is not None:
+            imgH, imgW = sample_vis.shape[:2]
+            split_map = (split_map * 255).astype(np.uint8)
+            split_map = cv2.applyColorMap(split_map, cv2.COLORMAP_JET)
+            split_map = cv2.resize(split_map, (imgW, imgH), interpolation=cv2.INTER_NEAREST)
+            sample_vis = split_map * 0.9 + sample_vis
         
         # save image
         if vis_dir is not None:
@@ -75,7 +90,26 @@ def visualization(samples, targets, pred, vis_dir, split_map=None):
 
             name = targets[idx]['image_path'].split('/')[-1].split('.')[0]
             cv2.imwrite(os.path.join(vis_dir, '{}_gt{}_pred{}.jpg'.format(name, len(gts[idx]), len(pred[idx]))), sample_vis)
+            
+def apply_ignore_to_padding_mask(samples, targets):
+    _, _, H_pad, W_pad = samples.tensors.shape
 
+    for b, tgt in enumerate(targets):
+        if 'mask_ignore' not in tgt:
+            continue 
+        ignore = tgt['mask_ignore']                      
+        valid = (ignore[:, 2:] - ignore[:, :2]).prod(-1) > 4.0
+        ignore = ignore[valid]
+        if ignore.numel() == 0:
+            continue
+
+        boxes = ignore.round().long()
+        boxes[:, [0, 2]].clamp_(0, H_pad)    # y1, y2
+        boxes[:, [1, 3]].clamp_(0, W_pad)    # x1, x2
+
+        for y1, x1, y2, x2 in boxes:
+            samples.mask[b, y1:y2, x1:x2] = True
+        
 
 # training
 def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
@@ -89,9 +123,11 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     print_freq = 10
 
     for samples, targets in metric_logger.log_every(data_loader, print_freq, header):
+        # apply_ignore_to_padding_mask(samples, targets)
         samples = samples.to(device)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
         gt_points = [target['points'] for target in targets]
+        
 
         outputs = model(samples, epoch=epoch, train=True, 
                                         criterion=criterion, targets=targets)
@@ -150,6 +186,7 @@ def evaluate(model, data_loader, device, epoch=0, vis_dir=None):
         outputs_scores = torch.nn.functional.softmax(outputs['pred_logits'], -1)[:, :, 1][0]
         outputs_points = outputs['pred_points'][0]
         outputs_offsets = outputs['pred_offsets'][0]
+        outputs_queries = outputs['points_queries']
         
         # process predicted points
         predict_cnt = len(outputs_scores)
@@ -175,11 +212,13 @@ def evaluate(model, data_loader, device, epoch=0, vis_dir=None):
         if vis_dir: 
             points = [[point[0]*img_h, point[1]*img_w] for point in outputs_points]     # recover to actual points
             split_map = (outputs['split_map_raw'][0].detach().cpu().squeeze(0) > 0.5).float().numpy()
-            visualization(samples, targets, [points], vis_dir, split_map=split_map)
+            visualization(samples, targets, [points], vis_dir, split_map=split_map, queries=outputs_queries)
     
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     results = {k: meter.global_avg for k, meter in metric_logger.meters.items()}
     results['mse'] = np.sqrt(results['mse'])
+    # print(y_true_all)
+    # print(y_pred_all)
     results['r2'] = r2_score(y_true_all, y_pred_all)
     return results

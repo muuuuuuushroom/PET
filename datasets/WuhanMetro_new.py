@@ -33,11 +33,26 @@ class WuhanMetro(Dataset):
         super().__init__()
         self.root_path = data_root
         
+        data_list_path = os.path.join(data_root, 'points_count_filtered_split.json')
+        with open(data_list_path, "r", encoding="utf-8") as f:
+            ann = json.load(f)
         dataset_type = "train" if train else "test"
+        
+        self.img_list = [
+            os.path.join(data_root, "all_imgs", rel_path)   # 拼绝对路径
+            for rel_path, meta in ann.items()
+            if meta.get("type") == dataset_type
+        ]
+        self.ann_list = [
+            os.path.join(data_root, "json", rel_path.replace('.jpg', '.json'))  # 拼绝对路径
+            for rel_path, meta in ann.items()
+            if meta.get("type") == dataset_type
+        ]
+        
         data_list_path = os.path.join(data_root, dataset_type+'.txt')
         # self.data_list = [name.split(' ') for name in open(data_list_path).read().splitlines()]
-        self.img_list = [os.path.join(dataset_type, name) for name in open(data_list_path).read().splitlines()]
-        self.ann_list = [os.path.join('json', name.replace('.jpg', '.json')) for name in open(data_list_path).read().splitlines()]
+        # self.img_list = [os.path.join(dataset_type, name) for name in open(data_list_path).read().splitlines()]
+        # self.ann_list = [os.path.join('json', name.replace('.jpg', '.json')) for name in open(data_list_path).read().splitlines()]
         self.nSamples = len(self.img_list)
 
         self.transform = transform
@@ -67,7 +82,8 @@ class WuhanMetro(Dataset):
         Compute crowd density:
             - defined as the average nearest distance between ground-truth points
         """
-        points_tensor = torch.from_numpy(points.copy())
+        # points_tensor = torch.from_numpy(points.copy())
+        points_tensor = points
         dist = torch.cdist(points_tensor, points_tensor, p=2)
         if points_tensor.shape[0] > 1:
             density = dist.sort(dim=1)[0][:,1].mean().reshape(-1)
@@ -90,12 +106,15 @@ class WuhanMetro(Dataset):
         assert index <= len(self), 'index range error'
 
         # load image and gt points
-        img_path = os.path.join(self.root_path, self.img_list[index])
-        gt_path = os.path.join(self.root_path, self.ann_list[index])
+        img_path = os.path.join(self.img_list[index])
+        gt_path = os.path.join(self.ann_list[index])
         
         img = cv2.imread(img_path)  #; img = np.array(img).transpose(2,0,1).astype(np.float32);
         points, masks = self.parse_json_mask(gt_path)
-        masks = torch.as_tensor(masks)
+        points = torch.as_tensor(points, dtype=torch.float32)
+        masks  = torch.as_tensor(masks,  dtype=torch.float32)
+        
+        # a strategy is to paint the mask white on the original picture
         if masks is not None and masks.numel() > 0:  
             for x1, y1, x2, y2 in masks.long():    
                 x1, y1, x2, y2 = map(int, (x1, y1, x2, y2))
@@ -109,7 +128,7 @@ class WuhanMetro(Dataset):
         # points = self.parse_json(gt_path)
 
         if self.train:
-            scale_range = [0.8, 1.2] # [0.5, 0.8]
+            scale_range = [0.8, 1.2]
             min_size = min(img.shape[1:])
             scale = random.uniform(*scale_range)
             
@@ -121,7 +140,7 @@ class WuhanMetro(Dataset):
         
         # random crop patch
         if self.train:
-            img, points = self.random_crop(img, points, patch_size=self.patch_size)
+            img, points, masks = self.random_crop(img, points, masks, patch_size=self.patch_size)
             
         # random flip horizontal
         if random.random() > 0.5 and self.train and self.flip:
@@ -130,8 +149,15 @@ class WuhanMetro(Dataset):
 
         # target
         target = {}
-        target['points'] = torch.from_numpy(points[:,::-1].copy()) 
+        # target['points'] = torch.from_numpy(points[:,::-1].copy()) 
+        # target['labels'] = torch.ones([points.shape[0]]).long()
+        target['points'] = points[:, [1, 0]].clone()
         target['labels'] = torch.ones([points.shape[0]]).long()
+        if masks.numel() > 0:
+            target['mask_ignore'] = masks[:, [1, 0, 3, 2]]
+        else:
+            target['mask_ignore'] = torch.tensor([[0., 0., 0., 0.]], dtype=torch.float32, device=points.device)
+            
 
         if self.train:
             density = self.compute_density(points)
@@ -211,70 +237,99 @@ class WuhanMetro(Dataset):
         masks  = np.asarray(msk_list, dtype=np.float32)       # (N_masks, 4)
 
         return points, masks
-
+    
     @staticmethod
-    def random_crop(img, points, patch_size: int = 256, ratio: float = 0.1):
-        H, W = img.size(1), img.size(2)          # img 是 Tensor(C,H,W)
+    def random_crop(img,
+                    points,
+                    masks=None,
+                    patch_size=256,
+                    ratio=0.1):
+        """
+        img      : Tensor [C,H,W]
+        points   : Tensor [N,2]   (x,y)
+        masks    : Tensor [M,4] or None  (x1,y1,x2,y2)
+        """
+        H, W = img.shape[-2:]
 
-        # 0⃣ —— 若没有任何点，退化成全图随机 -------------------------------
-        has_points = points is not None and points.size > 0
-
-        # 1⃣ —— 计算 crop_window = [x_min, y_min, x_max, y_max] ----------
-        if not has_points or np.random.rand() < ratio:
-            crop_window = np.array([0, 0,
-                                    max(W - patch_size, 0),
-                                    max(H - patch_size, 0)])
+        # ---------- 1. 计算可选裁剪窗口 ---------- #
+        if np.random.rand() < ratio or (points.numel() == 0 and (masks is None or masks.numel() == 0)):
+            # 随机到整幅图范围
+            crop_win = np.array([0, 0, max(W - patch_size, 0), max(H - patch_size, 0)], dtype=np.int64)
         else:
-            x_min = max(points[:, 0].min() - patch_size / 2, 0)
-            y_min = max(points[:, 1].min() - patch_size / 2, 0)
-            x_max = min(points[:, 0].max() - patch_size / 2, W - patch_size)
-            y_max = min(points[:, 1].max() - patch_size / 2, H - patch_size)
-            crop_window = np.array([x_min, y_min, x_max, y_max])
+            xs = [points[:, 0]] if points.numel() else []
+            ys = [points[:, 1]] if points.numel() else []
+            if masks is not None and masks.numel():
+                xs.extend([masks[:, 0], masks[:, 2]])
+                ys.extend([masks[:, 1], masks[:, 3]])
+            xs = torch.cat(xs) if xs else torch.tensor([0])
+            ys = torch.cat(ys) if ys else torch.tensor([0])
 
-        crop_window = crop_window.astype(np.int64)
+            crop_win = np.array([
+                max(xs.min().item() - patch_size / 2., 0),
+                max(ys.min().item() - patch_size / 2., 0),
+                min(xs.max().item() - patch_size / 2., W - patch_size),
+                min(ys.max().item() - patch_size / 2., H - patch_size)
+            ], dtype=np.int64)
 
-        # 2⃣ —— 若可裁尺寸不足 patch_size，直接从左上角取 -------------------
-        if crop_window[2] < crop_window[0] or crop_window[3] < crop_window[1]:
-            start_w = 0
+        # ---------- 1.1 保证 crop_win 合法 ---------- #
+        if crop_win[0] > crop_win[2] or crop_win[1] > crop_win[3]:
+            # 退回整图（start ∈ [0, max(W/H - patch_size,0)])
+            crop_win = np.array([0, 0, max(W - patch_size, 0), max(H - patch_size, 0)], dtype=np.int64)
+
+        # ---------- 2. 随机选取起点 ---------- #
+        if H <= patch_size:
             start_h = 0
         else:
-            # randint(low, high) 要求 high ≥ low
-            start_w = random.randint(crop_window[0],
-                                     max(crop_window[0], crop_window[2]))
-            start_h = random.randint(crop_window[1],
-                                     max(crop_window[1], crop_window[3]))
+            start_h = random.randint(crop_win[1], crop_win[3])
 
-        end_w, end_h = start_w + patch_size, start_h + patch_size
-
-        # 3⃣ —— 裁剪图像 & 点 --------------------------------------------
-        result_img = img[:, start_h:end_h, start_w:end_w]
-
-        if has_points:
-            idx = ((points[:, 0] >= start_w) & (points[:, 0] <= end_w) &
-                   (points[:, 1] >= start_h) & (points[:, 1] <= end_h))
-            result_points = points[idx].copy()
-            result_points[:, 0] -= start_w
-            result_points[:, 1] -= start_h
+        if W <= patch_size:
+            start_w = 0
         else:
-            result_points = np.empty((0, 2), dtype=np.float32)
+            start_w = random.randint(crop_win[0], crop_win[2])
 
-        # 4⃣ —— 若裁后尺寸仍不足 patch_size，插值放大 ----------------------
-        if min(result_img.shape[-2:]) < patch_size:
-            imgH, imgW = result_img.shape[-2:]
+        end_h, end_w = start_h + patch_size, start_w + patch_size
+
+        # ---------- 3. 裁剪图片 ---------- #
+        crop_img = img[:, start_h:end_h, start_w:end_w]
+
+        # ---------- 4. 处理 points ---------- #
+        idx_p = (points[:, 0] >= start_w) & (points[:, 0] <= end_w) & \
+                (points[:, 1] >= start_h) & (points[:, 1] <= end_h)
+        crop_points = points[idx_p].clone()
+        if crop_points.numel():
+            crop_points[:, 0] -= start_w
+            crop_points[:, 1] -= start_h
+
+        # ---------- 5. 处理 masks ---------- #
+        if masks is not None and masks.numel():
+            idx_m = (masks[:, 2] > start_w) & (masks[:, 0] < end_w) & \
+                    (masks[:, 3] > start_h) & (masks[:, 1] < end_h)
+            crop_masks = masks[idx_m].clone()
+            if crop_masks.numel():
+                crop_masks[:, [0, 2]] = crop_masks[:, [0, 2]].clamp(start_w, end_w) - start_w
+                crop_masks[:, [1, 3]] = crop_masks[:, [1, 3]].clamp(start_h, end_h) - start_h
+        else:
+            crop_masks = torch.empty((0, 4), dtype=torch.float32)
+
+        # ---------- 6. 缩放到 patch_size（可选） ---------- #
+        if min(crop_img.shape[-2:]) < patch_size:
+            imgH, imgW = crop_img.shape[-2:]
             fH, fW = patch_size / imgH, patch_size / imgW
-            result_img = F.interpolate(result_img.unsqueeze(0),
-                                       size=(patch_size, patch_size),
-                                       mode="bilinear",
-                                       align_corners=False).squeeze(0)
-            if result_points.size > 0:
-                result_points[:, 0] *= fW
-                result_points[:, 1] *= fH
+            crop_img = F.interpolate(crop_img.unsqueeze(0),
+                                     (patch_size, patch_size),
+                                     mode='bilinear',
+                                     align_corners=False).squeeze(0)
+            if crop_points.numel():
+                crop_points[:, 0] *= fW
+                crop_points[:, 1] *= fH
+            if crop_masks.numel():
+                crop_masks[:, [0, 2]] *= fW
+                crop_masks[:, [1, 3]] *= fH
 
-        return result_img, result_points
-
+        return crop_img, crop_points, crop_masks
 def build_whm(image_set, args):
     data_root = args.data_path
-    args.patch_size = 256 
+    args.patch_size = 256
     transform = standard_transforms.Compose([
         standard_transforms.ToTensor(), standard_transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                                                       std=[0.229, 0.224, 0.225]),

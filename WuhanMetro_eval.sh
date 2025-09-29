@@ -1,5 +1,5 @@
 #!/bin/bash
-export CUDA_VISIBLE_DEVICES=6 \
+export CUDA_VISIBLE_DEVICES=4 \
 
 resumes=(
   "vgg_baseline"

@@ -333,7 +333,9 @@ class PET(nn.Module):
         src, mask = features[self.encode_feats].decompose()
         src_pos_embed = pos[self.encode_feats]
         assert mask is not None
-        encode_src = self.context_encoder(src, src_pos_embed, mask)
+        # encode_src = self.context_encoder(src, src_pos_embed, mask)
+        # context_info = (encode_src, src_pos_embed, mask)
+        encode_src = src
         context_info = (encode_src, src_pos_embed, mask)
         
         # apply quadtree splitter
@@ -589,6 +591,36 @@ def generate_gaussian_kernel_prob(kernel_size, sigma, device='cuda'):
     kernel = kernel / kernel.sum()
     return kernel
 
+def generate_gaussian_kernel(kernel_size, sigma, device):
+
+    x = torch.arange(kernel_size, device=device) - kernel_size // 2
+    y = torch.arange(kernel_size, device=device) - kernel_size // 2
+    xx, yy = torch.meshgrid(x, y, indexing='ij')
+    kernel = torch.exp(-(xx**2 + yy**2) / (2 * sigma**2))
+    kernel = kernel / kernel.sum()
+    return kernel
+
+def generate_density_map_torch(point_map, fixed_sigma=15.0, device='cuda'):
+
+    H, W = point_map.shape
+    gt_count = np.count_nonzero(point_map)
+    if gt_count == 0:
+        return np.zeros((H, W), dtype=np.float32)
+    
+    point_map_tensor = torch.from_numpy(point_map).unsqueeze(0).unsqueeze(0).to(device, dtype=torch.float32)
+    
+    sigma = fixed_sigma
+    kernel_size = int(6 * sigma)
+    if kernel_size % 2 == 0:
+        kernel_size += 1
+
+    gaussian_kernel = generate_gaussian_kernel(kernel_size, sigma, device)
+    gaussian_kernel = gaussian_kernel.unsqueeze(0).unsqueeze(0)
+    density_map_tensor = F.conv2d(point_map_tensor, gaussian_kernel, padding=kernel_size // 2)
+
+    return density_map_tensor.squeeze().cpu().numpy()
+
+
 
 class SetCriterion(nn.Module):
     """ Compute the loss for PET:
@@ -836,7 +868,10 @@ def build_pet(args):
 
     # build model
     num_classes = 1
-    backbone = build_backbone_vgg(args)
+    if args.backbone == 'vitadapter':
+        backbone = build_backbone_vitadapter(args)
+    elif args.backbone == 'vgg16_bn':
+        backbone = build_backbone_vgg(args)
     model = PET(
         backbone,
         num_classes=num_classes,

@@ -31,16 +31,18 @@ def get_args_parser():
     # training Parameters
     parser.add_argument('--lr', default=1e-4, type=float)
     parser.add_argument('--lr_backbone', default=1e-5, type=float)
-    parser.add_argument('--batch_size', default=8, type=int)
+    parser.add_argument('--batch_size', default=16, type=int)
     parser.add_argument('--weight_decay', default=1e-4, type=float)
     parser.add_argument('--epochs', default=1500, type=int)
+    parser.add_argument('--patch_size', default=256, type=int)
     parser.add_argument('--clip_max_norm', default=0.1, type=float,
                         help='gradient clipping max norm')
 
     # model parameters
     # - backbone
-    parser.add_argument('--backbone', default='vgg16_bn', type=str,
-                        help="Name of the convolutional backbone to use")
+    parser.add_argument('--backbone', default='vitadapter', type=str,
+                        help="Name of the convolutional backbone to use",
+                        choices=['vgg16_bn', 'vitadapter'])
     parser.add_argument('--position_embedding', default='sine', type=str, choices=('sine', 'learned', 'fourier'),
                         help="Type of positional embedding to use on top of the image features")
     # - transformer
@@ -69,7 +71,7 @@ def get_args_parser():
                         help="Relative classification weight of the no-object class")
 
     # dataset parameters
-    parser.add_argument('--dataset_file', default="SHA")
+    parser.add_argument('--dataset_file', default="SOY")
     parser.add_argument('--data_path', default="./data/ShanghaiTech/PartA", type=str)
 
     # misc parameters
@@ -77,7 +79,7 @@ def get_args_parser():
                         help='path where to save, empty for no saving')
     parser.add_argument('--device', default='cuda',
                         help='device to use for training / testing')
-    parser.add_argument('--seed', default=42, type=int)
+    parser.add_argument('--seed', default=3407, type=int)
     parser.add_argument('--resume', default='', help='resume from checkpoint')
     parser.add_argument('--start_epoch', default=0, type=int, metavar='N',
                         help='start epoch')

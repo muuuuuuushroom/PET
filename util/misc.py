@@ -308,6 +308,27 @@ def nested_tensor_from_tensor_list(tensor_list: List[Tensor]):
         for img, pad_img, m in zip(tensor_list, tensor, mask):
             pad_img[: img.shape[0], : img.shape[1], : img.shape[2]].copy_(img)
             m[: img.shape[1], :img.shape[2]] = False
+            
+        # mask_chunks = []
+        # for t in ignore_masks:
+        #     m = t.get("masks")
+        #     if m is None:
+        #         m = torch.empty((0, 4), dtype=torch.float32, device=device)
+        #     elif m.numel() == 0:
+        #         m = m.reshape(0, 4).to(device=device, dtype=torch.float32)
+        #     else:
+        #         m = m.to(device=device, dtype=torch.float32)
+        #     mask_chunks.append(m)
+        # all_masks = torch.cat(mask_chunks, dim=0) # (M_total, 4)
+
+        # ignore_tensor = torch.zeros_like(pad_mask)                  # False = valid
+        # for idx, ign in enumerate(all_masks):
+        #     if ign.numel() == 0:
+        #         continue
+        #     ign = ign.to(device=device, dtype=torch.bool)           # (H_i,W_i)
+        #     h_i, w_i = ign.shape
+        #     ignore_tensor[idx, :h_i, :w_i] = ign
+        # merged_mask = pad_mask | ignore_tensor                      # True = padding ⊕ ignore
     else:
         raise ValueError('not supported')
     return NestedTensor(tensor, mask)
