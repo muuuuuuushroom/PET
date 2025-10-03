@@ -147,12 +147,9 @@ class BackboneBase_ViTAdapter(nn.Module):
 
 
 class Backbone_ViTAdapter(BackboneBase_ViTAdapter):
-    """
-    对标 Backbone_VGG 的封装，内部实例化一个 ViT-Adapter (ViT-Small 参数)。
-    """
+
     def __init__(
         self,
-        # ViT-Small 默认参数
         img_size: int = 224,
         patch_size: int = 16,
         embed_dim: int = 384,      # ViT-S
@@ -219,21 +216,110 @@ class Joiner(nn.Sequential):
         pos = {}
         for name, x in xs.items():
             out[name] = x
-            pos[name] = self[1](x).to(x.tensors.dtype)  # 位置编码与特征 dtype 对齐
+            pos[name] = self[1](x).to(x.tensors.dtype)  
         return out, pos
+
+
+def _interpolate_pos_embed(pos_embed, old_size_hw, new_size_hw):
+    """
+    pos_embed: [1, N+cls, C] 或 [1, N, C]
+    old_size_hw/new_size_hw: (H, W) 的格点数，H*W=N
+    返回与 new_size_hw 匹配的 pos_embed，若存在 cls_token 则原样保留。
+    """
+    # 拆 cls_token（若存在）
+    has_cls = pos_embed.shape[1] != (old_size_hw[0] * old_size_hw[1])
+    if has_cls:
+        cls_tok, pos = pos_embed[:, :1], pos_embed[:, 1:]
+    else:
+        pos = pos_embed
+        cls_tok = None
+
+    C = pos.shape[-1]
+    pos = pos.reshape(1, old_size_hw[0], old_size_hw[1], C).permute(0, 3, 1, 2)  # [1,C,H,W]
+    pos = F.interpolate(pos, size=new_size_hw, mode='bicubic', align_corners=False)
+    pos = pos.permute(0, 2, 3, 1).reshape(1, new_size_hw[0] * new_size_hw[1], C)
+
+    if has_cls and cls_tok is not None:
+        pos = torch.cat([cls_tok, pos], dim=1)
+    return pos
+
+
+def load_dinov3_into_vit_adapter(vit, ckpt_path, img_size=224, patch_size=16, verbose=True):
+    """
+    将 DINOv3 的 ViT-S/16 权重加载到 ViT-Adapter 的 ViT 主干（vit）里。
+    - vit: 传入 backbone.body（ViTAdapter 实例）
+    - ckpt_path: DINOv3 权重路径
+    - img_size/patch_size: 当前模型的输入格点大小，用于 pos_embed 插值
+    """
+    ckpt = torch.load(ckpt_path, map_location="cpu")
+    # 兼容常见字段：'model' / 'teacher' / 'student' / 直接就是 state_dict
+    if isinstance(ckpt, dict):
+        state_dict = (
+            ckpt.get("model") or
+            ckpt.get("teacher") or
+            ckpt.get("student") or
+            ckpt
+        )
+    else:
+        state_dict = ckpt
+
+    # 只取 ViT 主干相关权重；DINOv3 常见命名已与 timm 一致（patch_embed/blocks/norm 等）
+    new_sd = {}
+    for k, v in state_dict.items():
+        # 1) 过滤掉不相关/形状不匹配的键（如 head/分类器、optimizer 状态等）
+        if any(x in k for x in ["head", "fc", "classifier", "pred"]):
+            continue
+
+        # 2) 常见前缀归一：有些权重会有 'backbone.'、'module.'、'encoder.' 前缀
+        nk = k
+        for pref in ["backbone.", "module.", "encoder."]:
+            if nk.startswith(pref):
+                nk = nk[len(pref):]
+
+        # 3) ViT-Adapter 里 ViT 主干通常沿用 timm 命名；保留原名放进去
+        new_sd[nk] = v
+
+    # === 位置编码插值：若 pos_embed 存在且网格不匹配，做插值 ===
+    if "pos_embed" in new_sd and isinstance(new_sd["pos_embed"], torch.Tensor):
+        pos = new_sd["pos_embed"]
+        # 旧网格：根据长度推断；考虑是否带 cls_token
+        num_tokens = pos.shape[1]
+        C = pos.shape[-1]
+        # 当前图像网格（不含 cls）：H*W = (img_size/patch_size)^2
+        new_hw = (img_size // patch_size, img_size // patch_size)
+
+        # 旧网格估计
+        has_cls = (num_tokens - 1) in [x * x for x in range(1, 1000)]
+        if has_cls:
+            N = num_tokens - 1
+        else:
+            N = num_tokens
+        old_h = int(math.sqrt(N))
+        old_w = N // old_h
+        old_hw = (old_h, old_w)
+
+        if old_hw != new_hw:
+            with torch.no_grad():
+                new_sd["pos_embed"] = _interpolate_pos_embed(pos, old_hw, new_hw)
+
+    # === 严格程度：对不上（例如 Adapter 的额外模块）直接忽略，让它们随机初始化 ===
+    missing, unexpected = vit.load_state_dict(new_sd, strict=False)
+    if verbose:
+        print(f"[DINOv3] load completed. missing={len(missing)}, unexpected={len(unexpected)}")
+        # 你也可以打印前若干项，帮助核对键名
+        # print("  missing(excerpt):", missing[:10])
+        # print("  unexpected(excerpt):", unexpected[:10])
 
 
 def build_backbone_vitadapter(args):
     """
-    构建与 build_backbone_vgg 同风格/接口的 ViT-Adapter 版骨干。
-
-    期望的 args 字段（若缺失则用 ViT-Small 默认值）：
+    Input:
       - img_size, patch_size, embed_dim, depth, num_heads, mlp_ratio, qkv_bias
       - conv_inplane, n_points, deform_num_heads, init_values, with_cffn, cffn_ratio,
         deform_ratio, add_vit_feature, use_extra_extractor, interaction_indexes
       - num_channels
 
-    返回:
+    Return: 
       model: Joiner(backbone, position_embedding)
       model.num_channels = backbone.num_channels (= 256)
     """
@@ -243,7 +329,6 @@ def build_backbone_vitadapter(args):
         setattr(args, "position_embedding", "sine")
     position_embedding = build_position_encoding(args)
 
-    # 读取 args 中的可选参数；若不存在则采用 ViT-Small 既定默认
     kw = dict(
         img_size=getattr(args, "img_size", 224),
         patch_size=16, #getattr(args, "patch_size", 16),
@@ -267,14 +352,27 @@ def build_backbone_vitadapter(args):
     )
 
     backbone = Backbone_ViTAdapter(**kw)
+    
+    ckpt_path = getattr(args, "pretrained_dinov3", None)
+    if ckpt_path:
+        print('loading dinov3_vits, pth:', ckpt_path)
+        load_dinov3_into_vit_adapter(
+            vit=backbone.body,           # 关键：ViT-Adapter 主体在 backbone.body 里
+            ckpt_path=ckpt_path,
+            img_size=getattr(args, "img_size", 224),
+            patch_size=getattr(args, "vit_patch_size", 16),  # 确保是 16
+            verbose=True
+        )
+        
     model = Joiner(backbone, position_embedding)
     model.num_channels = backbone.num_channels
     return model
 
 
+
+
 if __name__ == "__main__":
-    # 简单自检（假定存在 NestedTensor 与位置编码模块）
-    # 仅供开发时快速跑通
+
     B, C, H, W = 2, 3, 256, 256
     x = torch.randn(B, C, H, W)
     mask = torch.zeros(B, H, W, dtype=torch.bool)

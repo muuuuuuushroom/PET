@@ -45,6 +45,8 @@ def get_args_parser():
                         choices=['vgg16_bn', 'vitadapter', 'vit_in_adapter', 'dinov3'])
     parser.add_argument('--position_embedding', default='sine', type=str, choices=('sine', 'learned', 'fourier'),
                         help="Type of positional embedding to use on top of the image features")
+    parser.add_argument('--pretrained_dinov3', default=None)
+    
     # - transformer
     parser.add_argument('--dec_layers', default=2, type=int,
                         help="Number of decoding layers in the transformer")
