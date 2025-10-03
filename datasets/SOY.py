@@ -33,7 +33,7 @@ class SOY(Dataset):
         self.root_path = data_root
         
         # dataset_type = "distribution/train_list" if train else "distribution/test_list"
-        dataset_type = "random_dis/train_ran" if train else "random_dis/test_ran"
+        dataset_type = "train_ran" if train else "test_ran"
         # dataset_type = "train" if train else "test"
         data_list_path = os.path.join(data_root, dataset_type+'.txt')
         self.data_list = [name.split(' ') for name in open(data_list_path).read().splitlines()]
@@ -191,9 +191,22 @@ class SOY(Dataset):
         return (end - start) * pct + start
 
     @staticmethod
+    
     def parse_json(gt_path):
-        with open(gt_path, 'r') as f:
-            tree = json.load(f)
+        # 先尝试 UTF-8（通用）
+        try:
+            with open(gt_path, 'r', encoding='utf-8') as f:
+                tree = json.load(f)
+        except UnicodeDecodeError:
+            try:
+                with open(gt_path, 'r', encoding='utf-8-sig') as f:
+                    tree = json.load(f)
+            except UnicodeDecodeError:
+                with open(gt_path, 'r', encoding='gb18030') as f:
+                    tree = json.load(f)
+    # def parse_json(gt_path):
+    #     with open(gt_path, 'r') as f:
+    #         tree = json.load(f)
 
         points = []
         for shape in tree['shapes']:

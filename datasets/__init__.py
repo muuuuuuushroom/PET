@@ -9,7 +9,7 @@ data_path = {
     'SHA': 'data/Crowd_Counting/ShanghaiTech/part_A_final/',
     'SHB': 'data/Crowd_Counting/ShanghaiTech/part_B_final/',
     'WuhanMetro': 'data/WuhanMetroCount',
-    'SOY': '/data/zlt/RemoteSensePET/data/soybean',
+    'SOY': 'data/soybean',
 }
 
 def build_dataset(image_set, args):

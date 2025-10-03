@@ -872,10 +872,10 @@ def build_pet(args):
         backbone = build_backbone_vitadapter(args)
     elif args.backbone == 'vgg16_bn':
         backbone = build_backbone_vgg(args)
-    elif args.backbone == 'vit_in_adapter':
-        backbone = build_backbone_vit_in_adapter(args)
-    elif args.backbone == 'dinov3':
-        backbone = build_backbone_dinov3(args)
+    # elif args.backbone == 'vit_in_adapter':
+    #     backbone = build_backbone_vit_in_adapter(args)
+    # elif args.backbone == 'dinov3':
+    #     backbone = build_backbone_dinov3(args)
     
     model = PET(
         backbone,
