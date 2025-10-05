@@ -87,6 +87,49 @@ class ViTAdapter(TIMMVisionTransformer):
         c3 = c3 + self.level_embed[1]
         c4 = c4 + self.level_embed[2]
         return c2, c3, c4
+    
+    def _pos_embed_runtime(self, grid_h: int, grid_w: int):
+        """
+        根据当前 token 网格大小 (grid_h, grid_w) 对 self.pos_embed 做插值。
+        这样前向时无论输入是 256×256 裁块还是原图，位置编码都能对齐。
+        """
+        if getattr(self, "pos_embed", None) is None:
+            return None
+
+        pos = self.pos_embed  # [1, N(+1), C]
+        num_tokens = pos.shape[1]
+        C = pos.shape[-1]
+
+        # 判断是否包含 cls 位置：优先看 cls_token；否则用 N-1 是否为完全平方数来判断
+        has_cls = getattr(self, "cls_token", None) is not None
+        if not has_cls:
+            t = num_tokens - 1
+            has_cls = int(math.isqrt(t)) ** 2 == t  # 例如 14*14 + 1
+
+        if has_cls:
+            cls_pos, pos = pos[:, :1], pos[:, 1:]
+        else:
+            cls_pos = None
+
+        # 旧网格：优先用 patch_embed.grid_size；没有就从长度反推
+        old_hw = getattr(self.patch_embed, "grid_size", None)
+        if old_hw is None:
+            N = pos.shape[1]
+            old_h = int(math.isqrt(N))
+            old_w = N // old_h
+            old_hw = (old_h, old_w)
+
+        new_hw = (grid_h, grid_w)
+
+        # 网格不一致就插值
+        if new_hw != old_hw:
+            pos = pos.reshape(1, old_hw[0], old_hw[1], C).permute(0, 3, 1, 2)   # [1, C, H, W]
+            pos = F.interpolate(pos, size=new_hw, mode="bicubic", align_corners=False)
+            pos = pos.permute(0, 2, 3, 1).reshape(1, new_hw[0] * new_hw[1], C)
+
+        if has_cls and cls_pos is not None:
+            pos = torch.cat([cls_pos, pos], dim=1)
+        return pos
 
     def forward(self, x):
         deform_inputs1, deform_inputs2 = deform_inputs(x)

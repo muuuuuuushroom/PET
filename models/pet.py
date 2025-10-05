@@ -464,6 +464,8 @@ def build_density_map_from_points_with_kdtree(target_points, batch_indices, img_
                 sigma = max(alpha * d, 1.0)
             else:
                 sigma = np.average([img_h, img_w]) / 4.0  # fallback sigma
+                
+            # sigma = 15 # fixed setting
 
             # Generate Gaussian kernel
             kernel_size = int(6 * sigma)
@@ -548,6 +550,8 @@ def generate_prob_map_from_points(targets, img_h, img_w, device='cuda', alpha=0.
             sigma = alpha * d
         else:
             sigma = np.average(np.array([img_h, img_w])) / 4.0  # fallback
+        
+        # sigma = 15 # fixed setting
 
         sigma = max(sigma, 1.0)
 

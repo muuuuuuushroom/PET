@@ -4,12 +4,14 @@ import torchvision
 from .SHA import build as build_sha
 from .WuhanMetro import build_whm
 from .SOY import build_soy
+from .SOY_evon import build_soy_evon
 
 data_path = {
     'SHA': 'data/Crowd_Counting/ShanghaiTech/part_A_final/',
     'SHB': 'data/Crowd_Counting/ShanghaiTech/part_B_final/',
     'WuhanMetro': 'data/WuhanMetroCount',
     'SOY': 'data/soybean',
+    'SOY_evon': '/root/PET/eval_data',
 }
 
 def build_dataset(image_set, args):
@@ -20,4 +22,6 @@ def build_dataset(image_set, args):
         return build_whm(image_set, args)
     elif args.dataset_file == 'SOY':
         return build_soy(image_set, args)
+    elif args.dataset_file == 'SOY_evon':
+        return build_soy_evon(image_set, args)
     raise ValueError(f'dataset {args.dataset_file} not supported')

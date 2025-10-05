@@ -21,13 +21,6 @@ from pathlib import Path
 import numpy as np
 
 def load_np_basename_ci(path, *args, **kwargs):
-    """
-    仅对 basename（不含扩展名）做大小写不敏感匹配：
-    - 目录必须完全一致（区分大小写）
-    - 扩展名必须完全一致（区分大小写），例如 '.npy' 就只匹配 '.npy'
-    - 若存在多个仅大小写不同的同名文件，抛出异常以避免歧义
-    额外的 *args, **kwargs 透传给 np.load
-    """
     p = Path(path)
     # 正常存在就直接读
     if p.exists():
@@ -112,10 +105,10 @@ class SOY(Dataset):
         self.root_path = data_root
         
         # dataset_type = "distribution/train_list" if train else "distribution/test_list"
-        dataset_type = "train_dis" if train else "test_dis"
+        # dataset_type = "train_dis" if train else "test_dis"
         # dataset_type = "train" if train else "test"
-        data_list_path = os.path.join(data_root, dataset_type+'.txt')
-        self.data_list = [name.split(' ') for name in open(data_list_path).read().splitlines()]
+        data_list_path = f'/root/PET/eval_data/images'
+        self.data_list = [[os.path.join(dirpath, f)] for dirpath, _, files in os.walk(data_list_path) for f in files]
         self.nSamples = len(self.data_list)
 
         self.transform = transform
@@ -184,14 +177,14 @@ class SOY(Dataset):
         assert index <= len(self), 'index range error'
 
         # load image and gt points
-        img_path = os.path.join(self.root_path, self.data_list[index][0])
+        img_path = self.data_list[index][0]
         npy_path = img_path.replace('images/', 'images_npy/').replace('.jpg', '.npy')
-        gt_path = os.path.join(self.root_path, self.data_list[index][1])
+        
         # img = Image.open(img_path); img = np.array(img).transpose(2,0,1).astype(np.float32); 
         # print(img.shape)
         # img = np.load(npy_path)
         img = load_np_basename_ci(npy_path)
-        points = self.parse_json(gt_path)
+        
 
         # img = cv2.resize(img, (512, 512))
         # points *= 512 / 2816
@@ -215,27 +208,16 @@ class SOY(Dataset):
                 points *= scale
 
         # random crop patch
-        if self.train:
-            img, points = self.random_crop(img, points, patch_size=self.patch_size, ratio=self.global_sample_ratio)
-
         # random flip horizontal
-        if random.random() > 0.5 and self.train and self.flip:
-            img = torch.flip(img, dims=[2])
-            points[:, 0] = self.patch_size - points[:, 0]
+
 
         # target
         target = {}
-        target['points'] = torch.from_numpy(points[:,::-1].copy())  # XY->HW due to query points are in a format of HW
-        target['labels'] = torch.ones([points.shape[0]]).long()
-
-        if self.train:
-            density = self.compute_density(points)
-            target['density'] = density
 
         if not self.train:
             target['image_path'] = img_path
 
-        return img, target
+        return img, img_path #target
     
     @staticmethod
     def re_onecycle_prob(initial_prob, max_prob, final_prob, total_steps, pct_start=0.3, anneal_strategy='cos'):
@@ -369,13 +351,13 @@ class SOY(Dataset):
         return result_img, result_points
 
 
-def build_soy(image_set, args):
+def build_soy_evon(image_set, args):
     data_root = args.data_path
     if image_set == 'train':
         train_set = SOY(data_root, train=True, global_crop_ratio=0.1, transform=None, patch_size=args.patch_size, flip=True, total_steps=args.epochs)
         return train_set
     elif image_set == 'val':
-        val_set = SOY(data_root, train=False, transform=None, patch_size=args.patch_size)
+        val_set = SOY(data_root, train=False, transform=None, patch_size=256)
         return val_set
     else:
         raise NotImplementedError

@@ -28,10 +28,11 @@ basetransform = standard_transforms.Compose([
         ),
     ])
 
-root = '/root/PET/data/soybean'
-for mode in ['train_ran', 'test_ran']:
-    data_list_path = f'/root/PET/data/soybean/{mode}.txt'
-    data_list = [name.split(' ') for name in open(data_list_path).read().splitlines()]
+root = '/root/PET/eval_data'
+for mode in ['train_ran']: #, 'test_ran']:
+    data_list_path = f'/root/PET/eval_data/images'
+    # data_list = [name.split(' ') for name in open(data_list_path).read().splitlines()]
+    data_list = [[os.path.join(dirpath, f)] for dirpath, _, files in os.walk(data_list_path) for f in files]
     # img_loaded = {}
     # point_loaded = {}
     img_loaded = []
@@ -40,10 +41,9 @@ for mode in ['train_ran', 'test_ran']:
     std = [0.229, 0.224, 0.225]
     import tqdm as td
     for sample in td.tqdm(data_list):
-        if sample[0].split('/')[-1].split('.')[0]+'.npy' in os.listdir('/root/PET/data/soybean/images_npy/'):
-            continue
-        img_path = os.path.join(root,sample[0])
-        gt_path = os.path.join(root, sample[1])
+        # if sample[0].split('/')[-1].split('.')[0]+'.npy' in os.listdir('/root/PET/eval_data/images_npy/'):
+        #     continue
+        img_path = os.path.join(root,'images',sample[0].split('/')[-1])
         img = cv2.imread(img_path)
         img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
         img = img.astype(np.float32) / 255
@@ -52,4 +52,4 @@ for mode in ['train_ran', 'test_ran']:
             img[:,:,i] = (img[:,:,i] - (mean[i])) / (std[i])
         img = img.transpose(2,0,1)
 
-        np.save('/root/PET/data/soybean/images_npy/'+sample[0].split('/')[-1].split('.')[0], img)
+        np.save('/root/PET/eval_data/images_npy/'+sample[0].split('/')[-1], img)

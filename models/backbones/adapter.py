@@ -1,16 +1,3 @@
-"""
-Backbone: ViT-Adapter (VIT-Small) in VGG-style Wrapper
-
-- 输入: NestedTensor(tensors, mask)
-- 输出: Dict[str, NestedTensor]，键为 '4x' 与 '8x'
-- num_channels: 统一映射为 256（与 vgg16_bn 的 FPN 输出通道数保持一致）
-
-依赖:
-- util.misc.NestedTensor
-- position_encoding.build_position_encoding
-- .vit_adapter.ViTAdapter
-"""
-
 from typing import Dict
 import math
 import torch
