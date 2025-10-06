@@ -122,7 +122,8 @@ def main(args):
     vis_dir = None if args.vis_dir == "" else args.vis_dir
     os.makedirs(vis_dir, exist_ok=True)
     results = evaluate(model, data_loader_val, device, vis_dir=vis_dir)
-    with open("results.json", "w", encoding="utf-8") as f:
+    name = args.resume.split('/')[-2]
+    with open(f"{name}_results.json", "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=4)
 
 
