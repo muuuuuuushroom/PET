@@ -28,9 +28,9 @@ basetransform = standard_transforms.Compose([
         ),
     ])
 
-root = '/root/PET/eval_data'
+root = '/root/PET/eval_data/soybean_testset'
 for mode in ['train_ran']: #, 'test_ran']:
-    data_list_path = f'/root/PET/eval_data/images'
+    data_list_path = f'/root/PET/eval_data/soybean_testset/images'
     # data_list = [name.split(' ') for name in open(data_list_path).read().splitlines()]
     data_list = [[os.path.join(dirpath, f)] for dirpath, _, files in os.walk(data_list_path) for f in files]
     # img_loaded = {}
@@ -52,4 +52,4 @@ for mode in ['train_ran']: #, 'test_ran']:
             img[:,:,i] = (img[:,:,i] - (mean[i])) / (std[i])
         img = img.transpose(2,0,1)
 
-        np.save('/root/PET/eval_data/images_npy/'+sample[0].split('/')[-1], img)
+        np.save('/root/PET/eval_data/soybean_testset/images_npy/'+sample[0].split('/')[-1], img)

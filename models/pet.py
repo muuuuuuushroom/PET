@@ -447,25 +447,25 @@ def build_density_map_from_points_with_kdtree(target_points, batch_indices, img_
             pt_map[0, 0, y, x] = 1.0
 
             # Estimate sigma
-            if num_pts > 1 and distances[i].shape[0] >= 2 and np.isfinite(distances[i][1]):
-                di = distances[i][1]
-                neighbor_idx = locations[i][1:]
-                neighbor_dists = []
+            # if num_pts > 1 and distances[i].shape[0] >= 2 and np.isfinite(distances[i][1]):
+            #     di = distances[i][1]
+            #     neighbor_idx = locations[i][1:]
+            #     neighbor_dists = []
 
-                for j in neighbor_idx:
-                    if j < len(distances) and distances[j].shape[0] >= 2 and np.isfinite(distances[j][1]):
-                        neighbor_dists.append(distances[j][1])
+            #     for j in neighbor_idx:
+            #         if j < len(distances) and distances[j].shape[0] >= 2 and np.isfinite(distances[j][1]):
+            #             neighbor_dists.append(distances[j][1])
 
-                if len(neighbor_dists) > 0:
-                    d_mtop3 = np.mean(neighbor_dists)
-                    d = min(di, d_mtop3)
-                else:
-                    d = di
-                sigma = max(alpha * d, 1.0)
-            else:
-                sigma = np.average([img_h, img_w]) / 4.0  # fallback sigma
+            #     if len(neighbor_dists) > 0:
+            #         d_mtop3 = np.mean(neighbor_dists)
+            #         d = min(di, d_mtop3)
+            #     else:
+            #         d = di
+            #     sigma = max(alpha * d, 1.0)
+            # else:
+            #     sigma = np.average([img_h, img_w]) / 4.0  # fallback sigma
                 
-            # sigma = 15 # fixed setting
+            sigma = 15 # fixed setting
 
             # Generate Gaussian kernel
             kernel_size = int(6 * sigma)
@@ -533,25 +533,25 @@ def generate_prob_map_from_points(targets, img_h, img_w, device='cuda', alpha=0.
         pt2d[0, 0, y, x] = 1.0
 
         # Dynamically calculate sigma based on neighbor distances
-        if len(distances[i]) >= 2 and np.isfinite(distances[i][1]):
-            di = distances[i][1]
-            neighbor_idx = locations[i][1:]
-            neighbor_distances = []
-            for idx in neighbor_idx:
-                if np.isfinite(distances[idx][1]):
-                    neighbor_distances.append(distances[idx][1])
+        # if len(distances[i]) >= 2 and np.isfinite(distances[i][1]):
+        #     di = distances[i][1]
+        #     neighbor_idx = locations[i][1:]
+        #     neighbor_distances = []
+        #     for idx in neighbor_idx:
+        #         if np.isfinite(distances[idx][1]):
+        #             neighbor_distances.append(distances[idx][1])
 
-            if len(neighbor_distances) > 0:
-                d_mtop3 = np.mean(neighbor_distances)
-                d = min(di, d_mtop3)
-            else:
-                d = di  # fallback
+        #     if len(neighbor_distances) > 0:
+        #         d_mtop3 = np.mean(neighbor_distances)
+        #         d = min(di, d_mtop3)
+        #     else:
+        #         d = di  # fallback
             
-            sigma = alpha * d
-        else:
-            sigma = np.average(np.array([img_h, img_w])) / 4.0  # fallback
+        #     sigma = alpha * d
+        # else:
+        #     sigma = np.average(np.array([img_h, img_w])) / 4.0  # fallback
         
-        # sigma = 15 # fixed setting
+        sigma = 15 # fixed setting
 
         sigma = max(sigma, 1.0)
 

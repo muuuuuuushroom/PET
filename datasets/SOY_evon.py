@@ -107,7 +107,7 @@ class SOY(Dataset):
         # dataset_type = "distribution/train_list" if train else "distribution/test_list"
         # dataset_type = "train_dis" if train else "test_dis"
         # dataset_type = "train" if train else "test"
-        data_list_path = f'/root/PET/eval_data/images'
+        data_list_path = f'/root/PET/eval_data/soybean_testset/images'
         self.data_list = [[os.path.join(dirpath, f)] for dirpath, _, files in os.walk(data_list_path) for f in files]
         self.nSamples = len(self.data_list)
 
