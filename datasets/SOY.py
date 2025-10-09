@@ -16,7 +16,7 @@ sys.path.append('./')
 sys.path.append('./models')
 import util.misc as utils
 
-from typing import Iterable, Any
+from typing import Union, Iterable, Any
 from pathlib import Path
 import numpy as np
 
@@ -60,7 +60,7 @@ def load_np_basename_ci(path, *args, **kwargs):
         )
         
 
-def _resolve_basename_ci(path: str | Path) -> Path:
+def _resolve_basename_ci(path: Union[str, Path]) -> Path:
     """
     仅对 basename（不含扩展名）大小写不敏感进行匹配；
     目录与扩展名需完全一致（区分大小写）。
@@ -112,7 +112,7 @@ class SOY(Dataset):
         self.root_path = data_root
         
         # dataset_type = "distribution/train_list" if train else "distribution/test_list"
-        dataset_type = "train_dis" if train else "test_dis"
+        dataset_type = "random_dis/train_ran" if train else "random_dis/test_ran"
         # dataset_type = "train" if train else "test"
         data_list_path = os.path.join(data_root, dataset_type+'.txt')
         self.data_list = [name.split(' ') for name in open(data_list_path).read().splitlines()]
@@ -271,7 +271,7 @@ class SOY(Dataset):
         return (end - start) * pct + start
 
     @staticmethod
-    def parse_json_basename_ci(gt_path: str | Path,
+    def parse_json_basename_ci(gt_path: Union[str, Path],
                            encodings: Iterable[str] = (
                                # 先尝试 UTF-8，再常见的中文编码
                                "utf-8", "utf-8-sig", "gb18030", "cp936", "cp950"

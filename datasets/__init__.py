@@ -11,7 +11,7 @@ data_path = {
     'SHB': 'data/Crowd_Counting/ShanghaiTech/part_B_final/',
     'WuhanMetro': 'data/WuhanMetroCount',
     'SOY': 'data/soybean',
-    'SOY_evon': '/root/PET/eval_data',
+    'SOY_evon': 'noneed',
 }
 
 def build_dataset(image_set, args):
